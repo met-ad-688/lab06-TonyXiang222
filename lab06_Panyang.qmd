@@ -1,0 +1,371 @@
+---
+title: 'Module 04: Lab 01'
+subtitle: Visual Reporting and Storytelling
+author: Your Name
+number-sections: true
+date: '2024-11-21'
+date-modified: today
+date-format: long
+embed-resources: true
+categories:
+  - visualization
+  - plotly
+  - spark
+  - Visual Reporting
+  - Storytelling with Data
+  - Industry-Specific Visualization
+execute:
+  eval: true
+  echo: true
+  freeze: auto
+jupyter: python3
+---
+
+# Objectives {.unnumbered}
+
+By the end of this lab, you will:
+1. Load and analyze the **Lightcast dataset** in **Spark DataFrame**.
+2. Create **five easy and three medium-complexity visualizations** using **Plotly**.
+3. Explore **salary distributions, employment trends, and job postings**.
+4. Analyze **skills in relation to NAICS/SOC/ONET codes and salaries**.
+5. Customize **colors, fonts, and styles** in all visualizations (**default themes result in a 2.5-point deduction**).
+6. Follow **best practices for reporting on data communication**.
+
+# Step 1: Load the Dataset {.unnumbered}
+
+```{python}
+import pandas as pd
+import plotly.express as px
+import plotly.io as pio
+pio.renderers.default = "notebook"
+from pyspark.sql import SparkSession
+from pyspark.sql.functions import col
+
+
+# Initialize Spark Session
+spark = SparkSession.builder.appName("/home/ubuntu/lab06-TonyXiang222/data/lightcast_job_postings.csv").getOrCreate()
+
+# Load Data
+df = spark.read.option("header", "true").option("inferSchema", "true").option("multiLine","true").option("escape", "\"").csv("./data/lightcast_job_postings.csv")
+
+# Show Schema and Sample Data
+df.printSchema()
+df.show(5)
+```
+
+# Salary Distribution by Employment Type
+- Identify salary trends across different employment types.
+- **Filter the dataset**
+  - Remove records where **salary is missing or zero**.
+- **Aggregate Data**
+  - Group by **employment type** and compute salary distribution.
+- **Visualize results**
+  - Create a **box plot** where:
+    - **X-axis** = `EMPLOYMENT_TYPE_NAME`
+    - **Y-axis** = `SALARY_FROM`
+  - Customize **colors, fonts, and styles** to avoid a **2.5-point deduction**.
+- **Explanation:** Write two sentences about what the graph reveals.
+
+
+```{python}
+# Your Code for 1st question here
+import plotly.express as px
+df_filtered = df.filter((df['SALARY'].isNotNull()) & (df['SALARY'] > 0))
+pdf = df.select("EMPLOYMENT_TYPE_NAME", "SALARY").toPandas()
+pdf['EMPLOYMENT_TYPE_NAME'] = pdf['EMPLOYMENT_TYPE_NAME'].str.replace('â‰¤', '≤', regex=False)
+
+fig = px.box(pdf, x="EMPLOYMENT_TYPE_NAME", y="SALARY", notched=True, title="Salary Distribution by Employment Type", color_discrete_sequence=["green"])
+fig.update_layout(font_family="Times New Roman", title_font_size=18)
+fig.write_html("./output/Salary-Distribution-by-Employment-Type.html")
+# fig.show()
+```
+
+```{=html}
+<iframe width="900" height="500" src="./output/Salary-Distribution-by-Employment-Type.html" title="Salary-Distribution-by-Employment-Type"></iframe>
+```
+
+# Salary Distribution by Industry
+- Compare salary variations across industries.
+- **Filter the dataset**
+  - Keep records where **salary is greater than zero**.
+- **Aggregate Data**
+  - Group by **NAICS industry codes**.
+- **Visualize results**
+  - Create a **box plot** where:
+    - **X-axis** = `NAICS2_NAME`
+    - **Y-axis** = `SALARY_FROM`
+  - Customize colors, fonts, and styles.
+- **Explanation:** Write two sentences about what the graph reveals.
+
+```{python}
+# Your code for 2nd question here
+pdf = df.select("NAICS2_NAME", "SALARY").toPandas()
+fig = px.box(pdf, x="NAICS2_NAME", y="SALARY", title="Salary Distribution by Industry", color_discrete_sequence=["#636EFA"])
+fig.update_layout(
+    font=dict(
+        family="Arial, sans-serif",
+        size=12,
+        color="black"
+    ),
+    title_font_size=18,
+    xaxis_title="Industry",
+    yaxis_title="Salary (USD)",
+    xaxis_tickangle=-45,  
+    plot_bgcolor='white',
+    paper_bgcolor='white',
+    yaxis=dict(
+        gridcolor='lightgray',
+        zerolinecolor='gray'
+    ),
+    margin=dict(l=50, r=50, t=80, b=200) 
+)
+
+# Optional: Reduce outlier clutter if necessary
+fig.update_traces(marker=dict(size=4, opacity=0.4))  
+
+fig.show()
+```
+
+# Job Posting Trends Over Time
+- Analyze how job postings fluctuate over time.
+- **Aggregate Data**
+  - Count job postings per **posted date (`POSTED`)**.
+- **Visualize results**
+  - Create a **line chart** where:
+    - **X-axis** = `POSTED`
+    - **Y-axis** = `Number of Job Postings`
+  - Apply custom colors and font styles.
+- **Explanation:** Write two sentences about what the graph reveals.
+
+```{python}
+# Your code for 3rd question here
+post_counts = df.groupBy("POSTED").count().toPandas()
+fig = px.line(
+    post_counts,
+    x="POSTED",
+    y="count",
+    title="Job Posting Trends Over Time",
+)
+fig.update_layout(
+    font_family="Times New Roman",
+    title_font_size=14,
+    xaxis_title="Posted Date",
+    yaxis_title="Number of Job Postings",
+)
+fig.show()
+```
+
+# Top 10 Job Titles by Count
+- Identify the most frequently posted job titles.
+- **Aggregate Data**
+  - Count the occurrences of each **job title (`TITLE_NAME`)**.
+  - Select the **top 10 most frequent titles**.
+- **Visualize results**
+  - Create a **bar chart** where:
+    - **X-axis** = `TITLE_NAME`
+    - **Y-axis** = `Job Count`
+  - Apply custom colors and font styles.
+- **Explanation:** Write two sentences about what the graph reveals.
+
+```{python}
+# Your code for 4th question here
+top_10_most_frequent_titles = df.groupBy("TITLE_NAME").count()
+top_10_most_frequent_titles = top_10_most_frequent_titles.orderBy("count", ascending=False).limit(10)
+pdf = top_10_most_frequent_titles.toPandas()
+fig = px.bar(
+    pdf,
+    x="TITLE_NAME",
+    y="count",
+    title="Top 10 Job Titles by Count",
+)
+
+fig.update_layout(
+    xaxis_title="Job Title",
+    yaxis_title="Job Count",
+    font_family="Arial",
+    title_font_size=14,
+    yaxis=dict(gridcolor='lightgray'),
+    xaxis_tickangle=-60
+)
+fig.show()
+```
+
+# Remote vs On-Site Job Postings
+- Compare the proportion of remote and on-site job postings.
+- **Aggregate Data**
+  - Count job postings by **remote type (`REMOTE_TYPE_NAME`)**.
+- **Visualize results**
+  - Create a **pie chart** where:
+    - **Labels** = `REMOTE_TYPE_NAME`
+    - **Values** = `Job Count`
+  - Apply custom colors and font styles.
+- **Explanation:** Write two sentences about what the graph reveals.
+
+```{python}
+remote_counts = df.groupBy("REMOTE_TYPE_NAME").count()
+pdf = remote_counts.toPandas()
+
+# Clean nulls and '[None]' values — update the column only
+pdf['REMOTE_TYPE_NAME'] = pdf['REMOTE_TYPE_NAME'].fillna('Not Specified')
+pdf['REMOTE_TYPE_NAME'] = pdf['REMOTE_TYPE_NAME'].replace('[None]', 'Not Specified')
+
+fig = px.pie(
+    pdf,
+    names="REMOTE_TYPE_NAME",
+    values="count",
+    title="Remote vs On-Site Job Postings"
+)
+
+fig.update_layout(
+    font_family="Arial",
+    title_font_size=14,
+    plot_bgcolor='white',
+    paper_bgcolor='white'
+)
+
+fig.show()
+```
+
+# Skill Demand Analysis by Industry (Stacked Bar Chart)
+- Identify which skills are most in demand in various industries.
+- **Aggregate Data**
+  - Extract **skills** from job postings.
+  - Count occurrences of skills grouped by **NAICS industry codes**.
+- **Visualize results**
+  - Create a **stacked bar chart** where:
+    - **X-axis** = `Industry`
+    - **Y-axis** = `Skill Count`
+    - **Color** = `Skill`
+  - Apply custom colors and font styles.
+- **Explanation:** Write two sentences about what the graph reveals.
+
+```{python}
+# Your code for 6th question here
+skill_count = df.groupBy("NAICS2_NAME", "SKILLS_NAME").count()
+pdf = skill_count.toPandas()
+
+fig = px.bar(
+    pdf,
+    x="NAICS2_NAME",
+    y="count",
+    color="SKILLS_NAME",
+    title="Skill Demand by Industry"
+)
+
+fig.update_layout(
+    barmode='stack',
+    font_family="Arial",
+    title_font_size=18,
+    xaxis_title="Industry",
+    yaxis_title="Skill Count",
+    plot_bgcolor='white',
+    paper_bgcolor='white',
+    yaxis=dict(gridcolor='lightgray'),
+    xaxis_tickangle=-45
+)
+
+fig.show()
+```
+
+
+# Salary Analysis by ONET Occupation Type (Bubble Chart)
+- Analyze how salaries differ across ONET occupation types.
+- **Aggregate Data**
+  - Compute **median salary** for each occupation in the **ONET taxonomy**.
+- **Visualize results**
+  - Create a **bubble chart** where:
+    - **X-axis** = `ONET_NAME`
+    - **Y-axis** = `Median Salary`
+    - **Size** = Number of job postings
+  - Apply custom colors and font styles.
+- **Explanation:** Write two sentences about what the graph reveals.
+
+```{python}
+# Your code for 7th question here
+import pyspark.sql.functions as F
+import plotly.express as px
+
+aggregated = df.groupBy("ONET_NAME").agg(
+    F.expr("percentile_approx(SALARY, 0.5)").alias("Median_Salary"),
+    F.count("*").alias("Job_Post_Count")
+)
+
+pdf = aggregated.toPandas()
+
+fig = px.scatter(
+    pdf,
+    x="ONET_NAME",
+    y="Median_Salary",
+    size="Job_Post_Count",
+    title="Salary Analysis by ONET Occupation Type",
+    color_discrete_sequence=["#636EFA"]
+)
+
+fig.update_layout(
+    font_family="Arial",
+    title_font_size=18,
+    xaxis_title="Occupation Type (ONET)",
+    yaxis_title="Median Salary (USD)",
+    plot_bgcolor='white',
+    paper_bgcolor='white',
+    yaxis=dict(gridcolor='lightgray'),
+    xaxis_tickangle=-45
+)
+fig.update_yaxes(range=[0, pdf['Median_Salary'].max() * 1.2])
+
+fig.show()
+```
+
+# Career Pathway Trends (Sankey Diagram)
+- Visualize job transitions between different occupation levels.
+- **Aggregate Data**
+  - Identify career transitions between **SOC job classifications**.
+- **Visualize results**
+  - Create a **Sankey diagram** where:
+    - **Source** = `SOC_2021_2_NAME`
+    - **Target** = `SOC_2021_3_NAME`
+    - **Value** = Number of transitions
+  - Apply custom colors and font styles.
+- **Explanation:** Write two sentences about what the graph reveals.
+
+```{python}
+# Your code for 8th question here
+transitions = df.groupBy("SOC_2021_2_NAME", "SOC_2021_3_NAME").count()
+pdf = transitions.toPandas()
+
+# Create unique node list and map to indices
+all_nodes = list(set(pdf['SOC_2021_2_NAME']).union(set(pdf['SOC_2021_3_NAME'])))
+node_mapping = {name: idx for idx, name in enumerate(all_nodes)}
+
+pdf['source_id'] = pdf['SOC_2021_2_NAME'].map(node_mapping)
+pdf['target_id'] = pdf['SOC_2021_3_NAME'].map(node_mapping)
+
+import plotly.graph_objects as go
+
+fig = go.Figure(data=[go.Sankey(
+    node=dict(
+        pad=15,
+        thickness=20,
+        line=dict(color="black", width=0.5),
+        label=all_nodes,
+        color="blue"
+    ),
+    link=dict(
+        source=pdf['source_id'],
+        target=pdf['target_id'],
+        value=pdf['count']
+    )
+)])
+
+fig.update_layout(
+    title_text="Career Pathway Trends by SOC Transitions",
+    font_family="Arial",
+    title_font_size=18,
+    font_size=12,
+    plot_bgcolor='white',
+    paper_bgcolor='white'
+)
+
+fig.show()
+```
+
